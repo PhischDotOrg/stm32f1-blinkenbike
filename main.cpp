@@ -38,6 +38,8 @@
 #include <devices/Ws2812bStrip.hpp>
 
 #include "ShutdownHandler.hpp"
+#include "RotaryEncoder.hpp"
+#include "PushButton.hpp"
 
 /*******************************************************************************
  * System Devices
@@ -87,17 +89,6 @@ static stm32::Uart::Usart1<gpio::AlternateFnPin>    uart_access(rcc, uart_rx, ua
 uart::UartDevice                        g_uart(&uart_access);
 
 /*******************************************************************************
- * DMA Engines
- ******************************************************************************/
-static stm32::Dma::Engine               dma_1(rcc);
-
-/*******************************************************************************
- * DMA Streams and Channels
- ******************************************************************************/
-static stm32::Dma::Channel<2>           ws2812b_spiRxDmaChannel(nvic, dma_1);
-static stm32::Dma::Channel<3>           ws2812b_spiTxDmaChannel(nvic, dma_1);
-
-/*******************************************************************************
  * WS2812b Strip
  ******************************************************************************/
 static gpio::AlternateFnPin spi_sclk(gpio_engine_A, 5);
@@ -105,17 +96,9 @@ static gpio::AlternateFnPin spi_nsel(gpio_engine_A, 4);
 static gpio::AlternateFnPin spi_mosi(gpio_engine_A, 7);
 static gpio::AlternateFnPin spi_miso(gpio_engine_A, 6);
 
-#if defined(SPI_VIA_DMA)
-static stm32::Spi::DmaSpi1<
-    gpio::AlternateFnPin,
-    decltype(ws2812b_spiTxDmaChannel),
-    decltype(ws2812b_spiRxDmaChannel)
->
-#else
 static stm32::Spi::Spi1<
     gpio::AlternateFnPin
 >
-#endif
 ws2812b_spibus( /* p_rcc = */ rcc,
                                     #if defined(SPI_VIA_DMA)
                                         /* p_txDmaChannel = */ ws2812b_spiTxDmaChannel,
@@ -133,6 +116,8 @@ static devices::Ws2812bStripT<
     decltype(ws2812b_spidev),
     devices::Ws2812bDataNonInverted
 >                                                           ws2812bStrip(ws2812b_spidev);
+
+static tasks::ShutdownHandler  shutdownHandler("shutdown", pwr, ws2812bStrip, 2);
 
 /*******************************************************************************
  * Rotary Encoder
@@ -171,226 +156,9 @@ toggleLed(void *p_data) {
 static tasks::PeriodicCallback  task_500ms("t_500ms", 2, 500, &toggleLed, &led_status);
 #endif
 
-static tasks::ShutdownHandler  shutdownHandler("shutdown", pwr, ws2812bStrip, 2);
-
-/*******************************************************************************
- * Rotary Encoder Timer and IRQ Handler
- ******************************************************************************/
-
-/*
- * Configure the Timer in Encoder Mode.
- *
- * Encoder Pin that is changing first ("CLK" or "CW") should be connected to
- * Timer Channel 2.
- *
- * Encoder Pin that is changing later ("DT" or "CCW") should be connected to
- * Timer Channel 1.
- *
- * Timer is configured to count when an edge on TI2FP1, i.e. Timer Channel 2 is
- * detected. The direction of the counter will depend on the signal level on the
- * Timer Channel 1 input pin.
- *
- * In the Timer Hardware, Timer Channel 1 generates the TI1F_ED signal which
- * indicates any edge (rising or falling) on the input pin. This signal can be
- * used to trigger the counter.
- *
- * The Timer is configured raise an interrupt when triggered.
- *
- * This means when the knob is turned clockwise:
- * - The "CW" Pin changes, causing an edge on TI2FP1.
- * - The edge on TI2FP1 causes the counter to count downwards.
- *     - If "CW" changes from 'low' to 'high', i.e. there is a rising edge,
- *       this means that "CCW" must still be 'low'.
- *     - If "CW" changes from 'high' to 'low', i.e. there is a falling edge,
- *       this means that "CCW" must still be 'high'.
- *     - See Table #85 in the STM32F103 CPU Reference Manual.
- * - When the knob is turned further, the "CCW" Pin changes, causing an
- *   edge on TI1FP2.
- *  - The edge on TI1FP2 triggers the counter, causing an interrupt (TIF).
- *  - In the Timer IRQ Handler, Software can read the current position of the
- *    knob in the Timer's CNT register.
- */
-template<
-    intptr_t AddressT
->
-static void
-initRotaryEncoderTimer(uint16_t p_maxCounter) {
-    TIM_TypeDef * const p_tim = reinterpret_cast<TIM_TypeDef *>(AddressT);
-    const stm32::EngineT<AddressT> * const engine = nullptr;
-
-    rcc.enableEngine(*engine);
-    nvic.enableIrq(*engine);
-
-    g_rotaryCW.selectAlternateFn(static_cast<const stm32::EngineT<AddressT> &>(*engine));
-    g_rotaryCCW.selectAlternateFn(static_cast<const stm32::EngineT<AddressT> &>(*engine));
-
-    /*
-     * From TIM_Base_SetConfig()
-     */
-    /* Auto-reload preload enable: TIMx_ARR register is buffered */
-    p_tim->CR1 &= ~(TIM_CR1_ARPE_Msk);
-    p_tim->CR1 |= (1 << TIM_CR1_ARPE_Pos);
-
-    /* Clock Divison */
-    p_tim->CR1 |= (0b10 << TIM_CR1_CKD_Pos);
-
-    /* Auto-Reload Register */
-    p_tim->ARR = p_maxCounter - 1;
-
-    /* Prescaler */
-    p_tim->PSC = 0;
-
-    /* Update / Re-initialize Counter */
-    p_tim->EGR |= TIM_EGR_UG;
-
-    /*
-     * From HAL_TIM_Encoder_Init()
-     */
-    /* Step 1: Set Encoder Mode -- SMS[2:0] = 0b011 */
-    p_tim->SMCR  &= ~(TIM_SMCR_SMS_Msk);
-
-    /*
-     * b001 -- Encoder Mode #1 -- Counter ticks on TI2FP1 Edge
-     * b010 -- Encoder Mode #2 -- Counter ticks on TI1FP2 Edge
-     * b011 -- Encoder Mode #3 -- Counter ticks on both TI1FP2 and TI1FP1 Edge.
-     *
-     * Counter should count on TI2FP1.
-     */
-    p_tim->SMCR  |= (0b001 << TIM_SMCR_SMS_Pos);
-
-    /* Step 2: Capture/Compare Selection: CC{1,2} configured as Input, IC{1,2} mapped to TI{1,2} */
-    p_tim->CCMR1 &= ~(TIM_CCMR1_CC1S_Msk);
-    p_tim->CCMR1 |= (0b01 << TIM_CCMR1_CC1S_Pos);
-
-    p_tim->CCMR1 &= ~(TIM_CCMR1_CC2S_Msk);
-    p_tim->CCMR1 |= (0b01 << TIM_CCMR1_CC2S_Pos);
-
-    /* Step 3: Configure Prescaler as Disabled, i.e. no Prescaler */
-    p_tim->CCMR1 &= ~(TIM_CCMR1_IC1PSC_Msk);
-    p_tim->CCMR1 |= (0 << TIM_CCMR1_IC1PSC_Pos);
-
-    p_tim->CCMR1 &= ~(TIM_CCMR1_IC1PSC_Msk);
-    p_tim->CCMR1 |= (0 << TIM_CCMR1_IC1PSC_Pos);
-
-    /* Step 4: Configure Input Capture Filter */
-    unsigned filter = 0b1111;
-
-    p_tim->CCMR1 &= ~(TIM_CCMR1_IC1F_Msk);
-    p_tim->CCMR1 |= (filter << TIM_CCMR1_IC1F_Pos);
-
-    p_tim->CCMR1 &= ~(TIM_CCMR1_IC2F_Msk);
-    p_tim->CCMR1 |= (filter << TIM_CCMR1_IC2F_Pos);
-
-    /* Step 5: Configure Input Channel Polarity */
-    p_tim->CCER  &= ~(TIM_CCER_CC1P_Msk);
-    p_tim->CCER  |= (0 << TIM_CCER_CC1P_Pos);
-
-    p_tim->CCER  &= ~(TIM_CCER_CC2P_Msk);
-    p_tim->CCER  |= (0 << TIM_CCER_CC2P_Pos);
-
-    /* Step 6: Enable Timer Channels */
-    p_tim->CCER  |= (TIM_CCER_CC1E | TIM_CCER_CC2E);
-
-    /*
-     * Trigger Selection -- TI1F_ED Signal
-     *
-     * 0b100 -- Trigger on TI1F_ED
-     * 0b101 -- Trigger on TI1FP1
-     * 0b110 -- Trigger on TI1FP2
-     */
-    p_tim->SMCR |= (0b100) << TIM_SMCR_TS_Pos;
-    p_tim->DIER |= (TIM_DIER_TIE /* | TIM_DIER_CC1IE | TIM_DIER_CC2IE */);
-
-    /* Go! */
-    p_tim->CR1 |= TIM_CR1_CEN;
-}
-
-
-static void
-handleRotaryEncoderTimerIrq(TIM_TypeDef * const p_tim) {
-    /*
-     * TIF Irq is triggered when there is an edge (rising and falling) on the TIMx_CH1 / TI1 Pin.
-     * DIR Bit is set if knob is turned clockwise (downcounter).
-     * DIR Bit is cleared, if knob is turned counter-clockwise (upcounter).
-     * Therefore, CNT counts down if knob is turned clockwise and up if knob is turned counter-clockwise.
-     */
-    if (p_tim->SR & TIM_SR_TIF) {
-        PHISCH_LOG("%s() TIM_SR_TIF CNT=%d DIR=%d\r\n", __func__, p_tim->CNT, (p_tim->CR1 & TIM_CR1_DIR) >> TIM_CR1_DIR_Pos);
-
-        p_tim->SR &= ~TIM_SR_TIF;
-    }
-
-    p_tim->SR = 0;
-}
-
 /*******************************************************************************
  * Push Button Timer and IRQ Handler
  ******************************************************************************/
-template<
-    intptr_t AddressT
->
-static void
-initPushButtonTimer(void) {
-    TIM_TypeDef * const tim = reinterpret_cast<TIM_TypeDef *>(AddressT);
-    const stm32::EngineT<AddressT> * const engine = nullptr;
-
-    rcc.enableEngine(*engine);
-    nvic.enableIrq(*engine);
-
-    g_rotaryPush.selectAlternateFn(static_cast<const stm32::EngineT<AddressT> &>(*engine));
-
-    /* Auto-reload preload enable: TIMx_ARR register is buffered */
-    tim->CR1 &= ~(TIM_CR1_ARPE_Msk);
-    tim->CR1 |= (1 << TIM_CR1_ARPE_Pos);
-
-    /* Clock Divison */
-    tim->CR1 |= (0b10 << TIM_CR1_CKD_Pos);
-
-    /* Auto-Reload Register */
-    tim->ARR = 0;
-
-    /* Prescaler */
-    tim->PSC = -1;
-
-    /* Update / Re-initialize Counter */
-    tim->EGR |= TIM_EGR_UG;
-
-    /* Set up TIM CC3 input */
-    unsigned filter = 0b1111;
-
-    tim->CCMR1 |= (0b01 >> TIM_CCMR1_CC1S_Pos);
-
-    tim->CCMR1 &= ~(TIM_CCMR1_IC1F_Msk);
-    tim->CCMR1 |= (filter << TIM_CCMR1_IC1F_Pos);
-
-    /* Configure Input Channel Polarity -- Rising Edge */
-    tim->CCER  &= ~TIM_CCER_CC1P;
-
-    /* Configure Input Channel Capture */
-    tim->CCER  |= TIM_CCER_CC1E;
-
-    tim->DIER |= TIM_DIER_CC1IE;
-
-    /* Go! */
-    tim->CR1 |= TIM_CR1_CEN;
-}
-
-static void
-handlePushButtonTimerIrq(TIM_TypeDef * const p_tim) {
-    if (p_tim->SR & TIM_SR_CC1IF) {
-        if (p_tim->CCER & TIM_CCER_CC1P) {
-            PHISCH_LOG("%s(): Release\r\n", __func__);
-            shutdownHandler.notifyIrq(decltype(shutdownHandler)::Shutdown_e::e_Stop);
-        } else {
-            PHISCH_LOG("%s(): Push\r\n", __func__);
-            shutdownHandler.notifyIrq(decltype(shutdownHandler)::Shutdown_e::e_Start);
-        }
-
-        p_tim->CCER ^= TIM_CCER_CC1P;
-    }
-
-    p_tim->SR = 0;
-}
 
 static int
 task100ms(void * /* p_data */) {
@@ -443,8 +211,8 @@ main(void) {
         goto bad;
     }
 
-    initRotaryEncoderTimer<TIM4_BASE>(5);
-    initPushButtonTimer<TIM2_BASE>();
+    initRotaryEncoderTimer<TIM4_BASE>(rcc, nvic, g_rotaryCW, g_rotaryCCW, 5);
+    initPushButtonTimer<TIM2_BASE>(rcc, nvic, g_rotaryPush);
 
     PHISCH_LOG("Starting FreeRTOS Scheduler...\r\n");
     vTaskStartScheduler();
@@ -465,23 +233,13 @@ SPI1_IRQHandler(void) {
 }
 
 void
-DMA1_Channel2_IRQHandler(void) {
-    ws2812b_spiRxDmaChannel.handleIrq();
-}
-
-void
-DMA1_Channel3_IRQHandler(void) {
-    ws2812b_spiTxDmaChannel.handleIrq();
-}
-
-void
 TIM4_IRQHandler(void) {
     handleRotaryEncoderTimerIrq(reinterpret_cast<TIM_TypeDef *>(TIM4_BASE));
 }
 
 void
 TIM2_IRQHandler(void) {
-    handlePushButtonTimerIrq(reinterpret_cast<TIM_TypeDef *>(TIM2_BASE));
+    handlePushButtonTimerIrq(reinterpret_cast<TIM_TypeDef *>(TIM2_BASE), shutdownHandler);
 }
 
 #if defined(__cplusplus)
