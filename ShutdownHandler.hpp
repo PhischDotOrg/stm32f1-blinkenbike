@@ -32,11 +32,11 @@ public:
 
     }
 
-    void notify(const Shutdown_e &p_event) {
+    void notify(const Shutdown_e &p_event) const {
         xTaskNotify(this->m_handle, static_cast<uint32_t>(p_event), m_notifyAction);
     }
 
-    void notifyIrq(const Shutdown_e &p_event) {
+    void notifyIrq(const Shutdown_e &p_event) const {
         xTaskNotifyFromISR(this->m_handle, static_cast<uint32_t>(p_event), m_notifyAction, nullptr);
     }
 
