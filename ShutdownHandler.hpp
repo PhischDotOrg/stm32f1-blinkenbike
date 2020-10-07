@@ -15,7 +15,7 @@ template<
     typename PwrT,
     typename CallbackT
 >
-class ShutdownHandler : public tasks::Task {
+class ShutdownHandlerT : public tasks::Task {
     static constexpr eNotifyAction  m_notifyAction   = eSetValueWithOverwrite;
     const PwrT &                    m_pwr;
     CallbackT &                     m_callback;
@@ -27,7 +27,7 @@ public:
         e_Stop  = 0b10
     };
 
-    ShutdownHandler(const char * const p_name, const PwrT &p_pwr, CallbackT & p_callback, uint8_t p_waitInSeconds, const unsigned p_priority = (configMAX_PRIORITIES - 1))
+    ShutdownHandlerT(const char * const p_name, const PwrT &p_pwr, CallbackT & p_callback, uint8_t p_waitInSeconds, const unsigned p_priority = (configMAX_PRIORITIES - 1))
       : tasks::Task(p_name, p_priority), m_pwr(p_pwr), m_callback(p_callback), m_waitInSeconds(p_waitInSeconds) {
 
     }

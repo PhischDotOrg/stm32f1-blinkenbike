@@ -40,6 +40,7 @@
 #include "ShutdownHandler.hpp"
 #include "RotaryEncoder.hpp"
 #include "PushButton.hpp"
+#include "BlinkenBike.hpp"
 
 /*******************************************************************************
  * System Devices
@@ -117,7 +118,10 @@ static devices::Ws2812bStripT<
     devices::Ws2812bDataNonInverted
 >                                                           ws2812bStrip(ws2812b_spidev);
 
-static tasks::ShutdownHandler  shutdownHandler("shutdown", pwr, ws2812bStrip, 2);
+/*******************************************************************************
+ * Main Blinkenlight State Machine Logic
+ ******************************************************************************/
+static BlinkenBikeT blinkenBike(ws2812bStrip);
 
 /*******************************************************************************
  * Rotary Encoder
@@ -129,43 +133,16 @@ static gpio::AlternateFnInPinT<gpio::PinPolicy::Termination_e::e_PullUp>    g_ro
 /*******************************************************************************
  * Tasks
  ******************************************************************************/
-static tasks::HeartbeatT<decltype(g_led_green)> heartbeat_gn("hrtbt_g", g_led_green, 3, 500);
-
-#if 1
-/* FIXME Only for testing the WS2812B Driver via SPI and DMA. */
-static bool led_status = false;
+static tasks::HeartbeatT                        heartbeat_gn("hrtbt_g", g_led_green, 3, 500);
+static tasks::ShutdownHandlerT                  shutdownHandler("shutdown", pwr, ws2812bStrip, 2);
 
 int
-toggleLed(void *p_data) {
-    assert(p_data != nullptr);
-
-    bool *status = static_cast<bool *>(p_data);
-
-    if (*status) {
-        ws2812bStrip.setPixel(0, FastLED::CRGB(0x0F0000));
-    } else {
-        ws2812bStrip.setPixel(0, FastLED::CRGB(0x000F00));
-    }
+refreshLedStrip(void * /* p_data */) {
     ws2812bStrip.show();
-
-    *status = !(*status);
-
     return (0);
 }
 
-static tasks::PeriodicCallback  task_500ms("t_500ms", 2, 500, &toggleLed, &led_status);
-#endif
-
-/*******************************************************************************
- * Push Button Timer and IRQ Handler
- ******************************************************************************/
-
-static int
-task100ms(void * /* p_data */) {
-    return (0);
-}
-
-static tasks::PeriodicCallback  task_100ms("t_100ms", 2, 100, &task100ms, nullptr);
+static tasks::PeriodicCallback  task_10ms("t_10ms", 2, 10, &refreshLedStrip);
 
 /*******************************************************************************
  *
@@ -239,7 +216,7 @@ TIM4_IRQHandler(void) {
 
 void
 TIM2_IRQHandler(void) {
-    handlePushButtonTimerIrq(reinterpret_cast<TIM_TypeDef *>(TIM2_BASE), shutdownHandler);
+    handlePushButtonTimerIrq(reinterpret_cast<TIM_TypeDef *>(TIM2_BASE), shutdownHandler, blinkenBike);
 }
 
 #if defined(__cplusplus)
