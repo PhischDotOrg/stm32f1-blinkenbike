@@ -37,6 +37,8 @@
 #include <spi/SpiDevice.hpp>
 #include <devices/Ws2812bStrip.hpp>
 
+#include "ShutdownHandler.hpp"
+
 /*******************************************************************************
  * System Devices
  ******************************************************************************/
@@ -169,63 +171,7 @@ toggleLed(void *p_data) {
 static tasks::PeriodicCallback  task_500ms("t_500ms", 2, 500, &toggleLed, &led_status);
 #endif
 
-/*******************************************************************************
- * Shutdown Task
- ******************************************************************************/
-template<typename PwrT>
-class ShutdownHandler : public tasks::Task {
-    static constexpr eNotifyAction  m_notifyAction   = eSetValueWithOverwrite;
-    const PwrT &                    m_pwr;
-    const uint8_t                   m_waitInSeconds;
-
-public:
-    enum class Shutdown_e : uint32_t {
-        e_Start = 0b01,
-        e_Stop  = 0b10
-    };
-
-    ShutdownHandler(const char * const p_name, const PwrT &p_pwr, uint8_t p_waitInSeconds, const unsigned p_priority = (configMAX_PRIORITIES - 1))
-      : tasks::Task(p_name, p_priority), m_pwr(p_pwr), m_waitInSeconds(p_waitInSeconds) {
-
-    }
-
-    void notify(const Shutdown_e &p_event) {
-        xTaskNotify(this->m_handle, static_cast<uint32_t>(p_event), m_notifyAction);
-    }
-
-    void notifyIrq(const Shutdown_e &p_event) {
-        xTaskNotifyFromISR(this->m_handle, static_cast<uint32_t>(p_event), m_notifyAction, nullptr);
-    }
-
-protected:
-    void
-    run(void) override {
-        Shutdown_e event;
-        BaseType_t rc;
-        TickType_t timeout = portMAX_DELAY;
-
-        do {
-            rc = xTaskNotifyWait(0, -1, reinterpret_cast<uint32_t *>(&event), timeout);
-
-            switch (event) {
-            case Shutdown_e::e_Start:
-                timeout = pdMS_TO_TICKS(m_waitInSeconds * 1000);
-                break;
-            case Shutdown_e::e_Stop:
-                timeout = portMAX_DELAY;
-                break;
-            }
-        } while (rc == pdTRUE);
-
-        ws2812bStrip.shutdown();
-
-        taskDISABLE_INTERRUPTS();
-
-        m_pwr.shutdown(PwrT::Mode_t::e_Standby);
-    }
-};
-
-static ShutdownHandler  shutdownHandler("shutdown", pwr, 2);
+static tasks::ShutdownHandler  shutdownHandler("shutdown", pwr, ws2812bStrip, 2);
 
 /*******************************************************************************
  * Rotary Encoder Timer and IRQ Handler
