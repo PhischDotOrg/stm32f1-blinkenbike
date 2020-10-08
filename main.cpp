@@ -138,15 +138,16 @@ static tasks::ShutdownHandlerT                  shutdownHandler("shutdown", pwr,
 
 int
 refreshLedStrip(void * /* p_data */) {
+    blinkenBike.blinkTick();
+
     taskDISABLE_INTERRUPTS();
-    blinkenBike.refresh();
     ws2812bStrip.show();
     taskENABLE_INTERRUPTS();
 
     return (0);
 }
 
-static tasks::PeriodicCallback  task_10ms("t_10ms", 2, 250, &refreshLedStrip);
+static tasks::PeriodicCallback  task_25ms("t_25ms", 2, 25, &refreshLedStrip);
 
 /*******************************************************************************
  *

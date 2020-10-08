@@ -62,7 +62,15 @@ BlinkenBikeT {
     Pixel::RGB                  m_rgbColor;
     bool                        m_colorChanged;
 
-    uint8_t                     m_speed;
+    int8_t                      m_counter;
+    static constexpr uint8_t    m_maxCounter = 40;
+
+    int8_t                      m_speed;
+    static constexpr uint8_t    m_minSpeed = 1;
+    static constexpr uint8_t    m_maxSpeed = (m_maxCounter / 3) + 1;
+
+    /* Flash State */
+    bool                        m_flash;
 
     template<typename ValueT, typename DistanceT>
     struct Knob_s {
@@ -117,9 +125,13 @@ BlinkenBikeT {
 
     void
     changeSpeed(int8_t p_distance) {
-        m_speed += 25 * p_distance;
+        m_speed += 4 * p_distance;
 
-        PHISCH_LOG("%s(state=%d) m_speed=%d\r\n", __func__, m_currentState, m_speed);
+        if (m_speed < m_minSpeed) {
+            m_speed = m_minSpeed;
+        } else if (m_speed > m_maxSpeed) {
+            m_speed = m_maxSpeed;
+        }
     }
 
     void
@@ -133,11 +145,6 @@ BlinkenBikeT {
     }
 
     void
-    refreshFlash(void) {
-
-    }
-
-    void
     refreshUi(void) {
         if (m_uiChanged) {
             m_ledStrip.setPixel(m_uiLed, m_uiHsv);
@@ -145,32 +152,21 @@ BlinkenBikeT {
         }
     }
 
-public:
-    BlinkenBikeT(LedStripT &p_ledStrip)
-      : m_ledStrip(p_ledStrip),
-        m_currentState(0),
-        m_uiHsv(static_cast<uint16_t>(m_states[m_currentState].m_stateColor), 255, m_maxBrightness / 2),
-        m_uiChanged(true),
-        m_hsvColor(0, 255, m_maxBrightness),
-        m_rgbColor(m_hsvColor),
-        m_colorChanged(true),
-        m_speed(128)
-    {
-        static_assert(LedStripT::SIZE > 1, "LED Strip should be more than one LED long!");
-        static_assert((LedStripT::SIZE % 2) == 1, "LED Strip should be 1 + an even number of LEDs long!");
-        static_assert(m_nStates == 8);
-
-        refresh();
-    }
-
     void
-    changeState(void) {
-        m_currentState = (m_currentState + 1) % m_nStates;
+    refreshFlash(void) {
+        if (m_counter == m_maxCounter) {
+            if (m_flash) {
+                for (unsigned idx = 1; idx < LedStripT::SIZE; idx++) {
+                    m_ledStrip.setPixel(idx, m_rgbColor);
+                }
+            } else {
+                for (unsigned idx = 1; idx < LedStripT::SIZE; idx++) {
+                    m_ledStrip.setPixel(idx, 0);
+                }
+            }
 
-        m_uiHsv = m_states[m_currentState].m_stateColor;
-        m_uiChanged = true;
-
-        refresh();
+            m_flash = !m_flash;
+        }
     }
 
     void
@@ -190,6 +186,47 @@ public:
         }
     }
 
+public:
+    BlinkenBikeT(LedStripT &p_ledStrip)
+      : m_ledStrip(p_ledStrip),
+        m_currentState(0),
+        m_uiHsv(static_cast<uint16_t>(m_states[m_currentState].m_stateColor), 255, m_maxBrightness / 2),
+        m_uiChanged(true),
+        m_hsvColor(0, 255, m_maxBrightness),
+        m_rgbColor(m_hsvColor),
+        m_colorChanged(true),
+        m_counter(0),
+        m_speed(m_minSpeed),
+        m_flash(false)
+    {
+        static_assert(LedStripT::SIZE > 1, "LED Strip should be more than one LED long!");
+        static_assert((LedStripT::SIZE % 2) == 1, "LED Strip should be 1 + an even number of LEDs long!");
+        static_assert(m_nStates == 8);
+
+        refresh();
+    }
+
+    void
+    changeState(void) {
+        m_currentState = (m_currentState + 1) % m_nStates;
+
+        m_uiHsv = m_states[m_currentState].m_stateColor;
+        m_uiChanged = true;
+
+        refresh();
+    }
+
+    void
+    blinkTick(void) {
+        m_counter -= m_speed;
+
+        if (m_counter < 0) {
+            m_counter = m_maxCounter;
+        }
+
+        refresh();
+    }
+
     void
     knobTurned(unsigned p_value, bool p_clockwise) {
         const InputMode_t inputMode = getCurrentInputMode();
@@ -207,8 +244,6 @@ public:
             changeSpeed(m_knob.distance());
             break;
         }
-
-        refresh();
     }
 };
 /*****************************************************************************/
