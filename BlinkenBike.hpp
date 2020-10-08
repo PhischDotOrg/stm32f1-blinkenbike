@@ -38,7 +38,7 @@ BlinkenBikeT {
     } State_t;
 
     static constexpr unsigned   m_uiLed = 0;
-    static constexpr State_t    m_states[8] /* __attribute__((aligned(4), section(".fixeddata"))) */ = {
+    static constexpr State_t    m_states[] __attribute__((aligned(4), section(".fixeddata"))) = {
         { .m_outputMode = OutputMode_t::e_Solid,                .m_inputMode = InputMode_t::e_Color,        .m_stateColor = Pixel::HSV::Hue::e_Red },
         { .m_outputMode = OutputMode_t::e_Solid,                .m_inputMode = InputMode_t::e_Brightness,   .m_stateColor = Pixel::HSV::Hue::e_Orange },
         { .m_outputMode = OutputMode_t::e_Flash,                .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Yellow },
@@ -50,7 +50,7 @@ BlinkenBikeT {
     };
     static constexpr unsigned   m_nStates = sizeof(m_states) / sizeof(m_states[0]);
 
-    static constexpr unsigned   m_maxBrightness = 128;
+    static constexpr unsigned   m_maxBrightness = 64;
 
     LedStripT &                 m_ledStrip;
     unsigned                    m_currentState;
@@ -131,13 +131,13 @@ public:
         m_currentState(0),
         m_uiHsv(static_cast<uint16_t>(m_states[m_currentState].m_stateColor), 255, m_maxBrightness / 2),
         m_hsvColor(0, 255, m_maxBrightness),
-        m_rgbColor(m_hsvColor),
         m_speed(128)
     {
-        // static_assert(LedStripT::SIZE > 1, "LED Strip should be more than one LED long!");
+        static_assert(LedStripT::SIZE > 1, "LED Strip should be more than one LED long!");
         static_assert((LedStripT::SIZE % 2) == 1, "LED Strip should be 1 + an even number of LEDs long!");
         static_assert(m_nStates == 8);
 
+        m_rgbColor = m_hsvColor;
         refresh();
     }
 
