@@ -56,9 +56,11 @@ BlinkenBikeT {
     unsigned                    m_currentState;
 
     Pixel::HSV                  m_uiHsv;
+    bool                        m_uiChanged;
 
     Pixel::HSV                  m_hsvColor;
     Pixel::RGB                  m_rgbColor;
+    bool                        m_colorChanged;
 
     uint8_t                     m_speed;
 
@@ -102,6 +104,7 @@ BlinkenBikeT {
         m_hsvColor.val = (m_hsvColor.val + p_distance) % m_maxBrightness;
 
         m_rgbColor = m_hsvColor;
+        m_colorChanged = true;
     }
 
     void
@@ -109,6 +112,7 @@ BlinkenBikeT {
         m_hsvColor.hue += 160 * p_distance;
 
         m_rgbColor = m_hsvColor;
+        m_colorChanged = true;
     }
 
     void
@@ -120,8 +124,24 @@ BlinkenBikeT {
 
     void
     refreshSolid(void) {
-        for (unsigned idx = 1; idx < LedStripT::SIZE; idx++) {
-            m_ledStrip.setPixel(idx, m_rgbColor);
+        if (m_colorChanged) {
+            for (unsigned idx = 1; idx < LedStripT::SIZE; idx++) {
+                m_ledStrip.setPixel(idx, m_rgbColor);
+            }
+            m_colorChanged = false;
+        }
+    }
+
+    void
+    refreshFlash(void) {
+
+    }
+
+    void
+    refreshUi(void) {
+        if (m_uiChanged) {
+            m_ledStrip.setPixel(m_uiLed, m_uiHsv);
+            m_uiChanged = false;
         }
     }
 
@@ -130,14 +150,16 @@ public:
       : m_ledStrip(p_ledStrip),
         m_currentState(0),
         m_uiHsv(static_cast<uint16_t>(m_states[m_currentState].m_stateColor), 255, m_maxBrightness / 2),
+        m_uiChanged(true),
         m_hsvColor(0, 255, m_maxBrightness),
+        m_rgbColor(m_hsvColor),
+        m_colorChanged(true),
         m_speed(128)
     {
         static_assert(LedStripT::SIZE > 1, "LED Strip should be more than one LED long!");
         static_assert((LedStripT::SIZE % 2) == 1, "LED Strip should be 1 + an even number of LEDs long!");
         static_assert(m_nStates == 8);
 
-        m_rgbColor = m_hsvColor;
         refresh();
     }
 
@@ -146,6 +168,7 @@ public:
         m_currentState = (m_currentState + 1) % m_nStates;
 
         m_uiHsv = m_states[m_currentState].m_stateColor;
+        m_uiChanged = true;
 
         refresh();
     }
@@ -154,12 +177,15 @@ public:
     refresh(void) {
         const OutputMode_t outputMode = getCurrentOutputMode();
 
-        m_ledStrip.setPixel(m_uiLed, m_uiHsv);
+        refreshUi();
 
         switch (outputMode) {
-        default:
         case OutputMode_t::e_Solid:
             refreshSolid();
+            break;
+        case OutputMode_t::e_Flash:
+        default:
+            refreshFlash();
             break;
         }
     }

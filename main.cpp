@@ -138,9 +138,10 @@ static tasks::ShutdownHandlerT                  shutdownHandler("shutdown", pwr,
 
 int
 refreshLedStrip(void * /* p_data */) {
-    // taskDISABLE_INTERRUPTS();
+    taskDISABLE_INTERRUPTS();
+    blinkenBike.refresh();
     ws2812bStrip.show();
-    // taskENABLE_INTERRUPTS();
+    taskENABLE_INTERRUPTS();
 
     return (0);
 }
