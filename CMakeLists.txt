@@ -29,7 +29,6 @@ set(TARGET_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
 )
 set(TARGET_LIBS
-    FastLED
 )
 set(STM32_BOARD   STM32F1_BluePill    CACHE STRING "STM32 Board Type")
 

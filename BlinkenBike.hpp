@@ -5,9 +5,9 @@
 #ifndef _BLINKENBIKE_HPP_BEF35430_91D6_4F5E_9587_EF88B244E219
 #define _BLINKENBIKE_HPP_BEF35430_91D6_4F5E_9587_EF88B244E219
 
-#include <FreeRTOS.h>
+#include <phisch/log.h>
 
-#include <FastLED/pixeltypes.h>
+#include <FreeRTOS.h>
 
 /*****************************************************************************/
 template<
@@ -34,19 +34,19 @@ BlinkenBikeT {
     typedef struct State_s {
         OutputMode_t            m_outputMode;
         InputMode_t             m_inputMode;
-        HSVHue                  m_stateColor;
+        Pixel::HSV::Hue         m_stateColor;
     } State_t;
 
     static constexpr unsigned   m_uiLed = 0;
     static constexpr State_t    m_states[8] /* __attribute__((aligned(4), section(".fixeddata"))) */ = {
-        { .m_outputMode = OutputMode_t::e_Solid,                .m_inputMode = InputMode_t::e_Color,        .m_stateColor = HSVHue::HUE_RED },
-        { .m_outputMode = OutputMode_t::e_Solid,                .m_inputMode = InputMode_t::e_Brightness,   .m_stateColor = HSVHue::HUE_ORANGE },
-        { .m_outputMode = OutputMode_t::e_Flash,                .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = HSVHue::HUE_YELLOW },
-        { .m_outputMode = OutputMode_t::e_UpDownSynchronous,    .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = HSVHue::HUE_GREEN },
-        { .m_outputMode = OutputMode_t::e_UpDownOpposite,       .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = HSVHue::HUE_AQUA },
-        { .m_outputMode = OutputMode_t::e_Upwards,              .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = HSVHue::HUE_BLUE },
-        { .m_outputMode = OutputMode_t::e_Downwards,            .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = HSVHue::HUE_PURPLE },
-        { .m_outputMode = OutputMode_t::e_EvenOdd,              .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = HSVHue::HUE_PINK },
+        { .m_outputMode = OutputMode_t::e_Solid,                .m_inputMode = InputMode_t::e_Color,        .m_stateColor = Pixel::HSV::Hue::e_Red },
+        { .m_outputMode = OutputMode_t::e_Solid,                .m_inputMode = InputMode_t::e_Brightness,   .m_stateColor = Pixel::HSV::Hue::e_Orange },
+        { .m_outputMode = OutputMode_t::e_Flash,                .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Yellow },
+        { .m_outputMode = OutputMode_t::e_UpDownSynchronous,    .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Green },
+        { .m_outputMode = OutputMode_t::e_UpDownOpposite,       .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Turquoise },
+        { .m_outputMode = OutputMode_t::e_Upwards,              .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Blue },
+        { .m_outputMode = OutputMode_t::e_Downwards,            .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Purple },
+        { .m_outputMode = OutputMode_t::e_EvenOdd,              .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Magenta },
     };
     static constexpr unsigned   m_nStates = sizeof(m_states) / sizeof(m_states[0]);
 
@@ -64,12 +64,14 @@ public:
     changeState(void) {
         m_currentState = (m_currentState + 1) % m_nStates;
 
-        HSVHue  uiColor = m_states[m_currentState].m_stateColor;
-        CRGB    uiPixel(uiColor);
+        Pixel::RGB  uiRgb;
+        Pixel::HSV  uiHsv(m_states[m_currentState].m_stateColor);
 
-        uiPixel.setHue(uiColor);
+        uiRgb = uiHsv;
 
-        m_ledStrip.setPixel(m_uiLed, uiPixel);
+        m_ledStrip.setPixel(m_uiLed, uiRgb);
+
+        PHISCH_LOG("%s() m_currentState = %d\tuiColor=%d R=%d G=%d B=%d\r\n", __func__, m_currentState, uiHsv.h, uiRgb.r, uiRgb.g, uiRgb.b);
     }
 };
 /*****************************************************************************/
