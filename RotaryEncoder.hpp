@@ -140,9 +140,11 @@ initRotaryEncoderTimer(const RccT &p_rcc, const NvicT &p_nvic, const PinT &p_rot
     p_tim->CR1 |= TIM_CR1_CEN;
 }
 
-
+template<
+    typename BlinkenBikeT
+>
 static void
-handleRotaryEncoderTimerIrq(TIM_TypeDef * const p_tim) {
+handleRotaryEncoderTimerIrq(TIM_TypeDef * const p_tim, BlinkenBikeT &p_blinkenBike) {
     /*
      * TIF Irq is triggered when there is an edge (rising and falling) on the TIMx_CH1 / TI1 Pin.
      * DIR Bit is set if knob is turned clockwise (downcounter).
@@ -150,7 +152,7 @@ handleRotaryEncoderTimerIrq(TIM_TypeDef * const p_tim) {
      * Therefore, CNT counts down if knob is turned clockwise and up if knob is turned counter-clockwise.
      */
     if (p_tim->SR & TIM_SR_TIF) {
-        PHISCH_LOG("%s() TIM_SR_TIF CNT=%d DIR=%d\r\n", __func__, p_tim->CNT, (p_tim->CR1 & TIM_CR1_DIR) >> TIM_CR1_DIR_Pos);
+        p_blinkenBike.knobTurned(p_tim->CNT, (p_tim->CR1 & TIM_CR1_DIR) >> TIM_CR1_DIR_Pos);
 
         p_tim->SR &= ~TIM_SR_TIF;
     }

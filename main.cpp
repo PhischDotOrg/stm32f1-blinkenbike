@@ -113,9 +113,9 @@ ws2812b_spibus( /* p_rcc = */ rcc,
 
 static spi::DeviceT<decltype(ws2812b_spibus)>               ws2812b_spidev(&ws2812b_spibus);
 static devices::Ws2812bStripT<
-    1,
+    1 + 18,
     decltype(ws2812b_spidev),
-    devices::Ws2812bDataNonInverted
+    devices::Ws2812bDataInverted
 >                                                           ws2812bStrip(ws2812b_spidev);
 
 /*******************************************************************************
@@ -133,16 +133,19 @@ static gpio::AlternateFnInPinT<gpio::PinPolicy::Termination_e::e_PullUp>    g_ro
 /*******************************************************************************
  * Tasks
  ******************************************************************************/
-static tasks::HeartbeatT                        heartbeat_gn("hrtbt_g", g_led_green, 3, 500);
-static tasks::ShutdownHandlerT                  shutdownHandler("shutdown", pwr, ws2812bStrip, 2);
+static tasks::HeartbeatT                        heartbeat_gn("hrtbt_g", g_led_green, 1, 500);
+static tasks::ShutdownHandlerT                  shutdownHandler("shutdown", pwr, ws2812bStrip, 3);
 
 int
 refreshLedStrip(void * /* p_data */) {
+    // taskDISABLE_INTERRUPTS();
     ws2812bStrip.show();
+    // taskENABLE_INTERRUPTS();
+
     return (0);
 }
 
-static tasks::PeriodicCallback  task_10ms("t_10ms", 2, 10, &refreshLedStrip);
+static tasks::PeriodicCallback  task_10ms("t_10ms", 2, 250, &refreshLedStrip);
 
 /*******************************************************************************
  *
@@ -211,7 +214,7 @@ SPI1_IRQHandler(void) {
 
 void
 TIM4_IRQHandler(void) {
-    handleRotaryEncoderTimerIrq(reinterpret_cast<TIM_TypeDef *>(TIM4_BASE));
+    handleRotaryEncoderTimerIrq(reinterpret_cast<TIM_TypeDef *>(TIM4_BASE), blinkenBike);
 }
 
 void

@@ -65,11 +65,9 @@ static void
 handlePushButtonTimerIrq(TIM_TypeDef * const p_tim, const ShutdownHandlerT &p_shutdownHandler, BlinkenBikeT &p_blinkenBike) {
     if (p_tim->SR & TIM_SR_CC1IF) {
         if (p_tim->CCER & TIM_CCER_CC1P) {
-            PHISCH_LOG("%s(): Release\r\n", __func__);
             p_shutdownHandler.notifyIrq(ShutdownHandlerT::Shutdown_e::e_Stop);
             p_blinkenBike.changeState();
         } else {
-            PHISCH_LOG("%s(): Push\r\n", __func__);
             p_shutdownHandler.notifyIrq(ShutdownHandlerT::Shutdown_e::e_Start);
         }
 
