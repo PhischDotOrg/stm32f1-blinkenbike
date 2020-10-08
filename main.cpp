@@ -184,8 +184,6 @@ main(void) {
      */
     pwr.enableWkup();
 
-    PHISCH_LOG("PWR::CSR = 0x%x\r\n", PWR->CSR);
-
     if (SysTick_Config(SystemCoreClock / 1000)) {
         PHISCH_LOG("FATAL: Capture Error!\r\n");
         goto bad;
