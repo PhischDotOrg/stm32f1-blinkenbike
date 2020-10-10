@@ -46,8 +46,8 @@
  * System Devices
  ******************************************************************************/
 static const constexpr stm32::PllCfg pllCfg = {
-    .m_pllSource        = stm32::PllCfg::PllSource_t::e_PllSourceHSE,
-    .m_hseSpeedInHz     = 4 * 1000 * 1000,
+    .m_pllSource        = stm32::PllCfg::PllSource_t::e_PllSourceHSI,
+    .m_hseSpeedInHz     = 0,
     .m_hsePrescaler     = stm32::PllCfg::HSEPrescaler_t::e_HSEPrescaler_None,
     .m_pllM             = stm32::PllCfg::PllMul_t::e_PllM_13,
     .m_sysclkSource     = stm32::PllCfg::SysclkSource_t::e_SysclkPLL,

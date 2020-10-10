@@ -35,18 +35,19 @@ BlinkenBikeT {
         OutputMode_t            m_outputMode;
         InputMode_t             m_inputMode;
         Pixel::HSV::Hue         m_stateColor;
+        uint8_t                 m_animationIdx;
     } State_t;
 
     static constexpr unsigned   m_uiLed = 0;
     static constexpr State_t    m_states[] __attribute__((aligned(4), section(".fixeddata"))) = {
-        { .m_outputMode = OutputMode_t::e_Solid,                .m_inputMode = InputMode_t::e_Color,        .m_stateColor = Pixel::HSV::Hue::e_Red },
-        { .m_outputMode = OutputMode_t::e_Solid,                .m_inputMode = InputMode_t::e_Brightness,   .m_stateColor = Pixel::HSV::Hue::e_Orange },
-        { .m_outputMode = OutputMode_t::e_Flash,                .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Yellow },
-        { .m_outputMode = OutputMode_t::e_UpDownSynchronous,    .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Green },
-        { .m_outputMode = OutputMode_t::e_UpDownOpposite,       .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Turquoise },
-        { .m_outputMode = OutputMode_t::e_Upwards,              .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Blue },
-        { .m_outputMode = OutputMode_t::e_Downwards,            .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Purple },
-        { .m_outputMode = OutputMode_t::e_EvenOdd,              .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Magenta },
+        { .m_outputMode = OutputMode_t::e_Solid,                .m_inputMode = InputMode_t::e_Color,        .m_stateColor = Pixel::HSV::Hue::e_Red,         .m_animationIdx = 0 },
+        { .m_outputMode = OutputMode_t::e_Solid,                .m_inputMode = InputMode_t::e_Brightness,   .m_stateColor = Pixel::HSV::Hue::e_Orange,      .m_animationIdx = 0 },
+        { .m_outputMode = OutputMode_t::e_Flash,                .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Yellow,      .m_animationIdx = 0 },
+        { .m_outputMode = OutputMode_t::e_UpDownSynchronous,    .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Green,       .m_animationIdx = 1 },
+        { .m_outputMode = OutputMode_t::e_UpDownOpposite,       .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Turquoise,   .m_animationIdx = 2 },
+        { .m_outputMode = OutputMode_t::e_Upwards,              .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Blue,        .m_animationIdx = 3 },
+        { .m_outputMode = OutputMode_t::e_Downwards,            .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Purple,      .m_animationIdx = 4 },
+        { .m_outputMode = OutputMode_t::e_EvenOdd,              .m_inputMode = InputMode_t::e_Speed,        .m_stateColor = Pixel::HSV::Hue::e_Magenta,     .m_animationIdx = 5 },
     };
     static constexpr unsigned   m_nStates = sizeof(m_states) / sizeof(m_states[0]);
 
@@ -71,6 +72,61 @@ BlinkenBikeT {
 
     /* Flash State */
     bool                        m_flash;
+
+    /* Flash States */
+    static constexpr uint16_t  __attribute__((aligned(4), section(".fixeddata"))) m_Flash[] = {
+        0b000000000,
+        0b111111111,
+    };
+
+    /* Up/Down States */
+    static constexpr uint16_t  __attribute__((aligned(4), section(".fixeddata"))) m_UpDown[] = {
+        0b100000000,
+        0b010000000,
+        0b001000000,
+        0b000100000,
+        0b000010000,
+        0b000001000,
+        0b000000100,
+        0b000000010,
+        0b000000001,
+        0b000000010,
+        0b000000100,
+        0b000001000,
+        0b000010000,
+        0b000100000,
+        0b001000000,
+        0b010000000,
+    };
+
+    /* Even/Odd States */
+    static constexpr uint16_t  __attribute__((aligned(4), section(".fixeddata"))) m_EvenOdd[] = {
+        0b101010101,
+        0b010101010,
+    };
+
+    typedef struct Animation_s {
+        const uint16_t * const  m_states;
+        unsigned                m_len;
+        bool                    m_opposite;
+    } Animation_t;
+
+    static constexpr Animation_t __attribute__((aligned(4), section(".fixeddata"))) m_animations[] = {
+        { .m_states = m_Flash,      .m_len = sizeof(m_Flash) / sizeof(m_Flash[0]),          .m_opposite = true },           // 0 -- e_Flash
+        { .m_states = m_UpDown,     .m_len = sizeof(m_UpDown) / sizeof(m_UpDown[0]),        .m_opposite = false },          // 1 -- e_UpDownSynchronous
+        { .m_states = m_UpDown,     .m_len = sizeof(m_UpDown) / sizeof(m_UpDown[0]),        .m_opposite = true },           // 2 -- e_UpDownOpposite
+        { .m_states = m_UpDown,     .m_len = ((sizeof(m_UpDown) / sizeof(m_UpDown[0])) / 2) + 1,    .m_opposite = false },  // 3 -- e_Upwards
+        { .m_states = m_UpDown,     .m_len = ((sizeof(m_UpDown) / sizeof(m_UpDown[0])) / 2) + 1,  .m_opposite = true },     // 4 -- e_Downwards
+        { .m_states = m_EvenOdd,    .m_len = sizeof(m_EvenOdd) / sizeof(m_EvenOdd[0]),      .m_opposite = false },          // 5 -- e_EvenOdd
+    };
+
+    static_assert(((sizeof(m_UpDown) / sizeof(m_UpDown[0]))) == 16);
+    static_assert(((sizeof(m_UpDown) / sizeof(m_UpDown[0]))) == 2 * ((LedStripT::SIZE / 2) - 1));
+    static_assert(((sizeof(m_UpDown) / sizeof(m_UpDown[0])) / 2) + 1 == 9);
+    static_assert(((sizeof(m_UpDown) / sizeof(m_UpDown[0])) / 2) + 1 == (LedStripT::SIZE / 2));
+
+    const Animation_t * m_currentAnimation;
+    uint8_t             m_animationIdx;
 
     template<typename ValueT, typename DistanceT>
     struct Knob_s {
@@ -170,6 +226,38 @@ BlinkenBikeT {
     }
 
     void
+    refreshAnimation(void) {
+        if (m_counter != m_maxCounter) return;
+
+        static_assert((LedStripT::SIZE / 2) == 9);
+
+        unsigned left, right;
+
+        for (unsigned idx = 0; idx < (LedStripT::SIZE / 2); idx++) {
+            left = 1 + idx;
+
+            if (m_currentAnimation->m_opposite == false) {
+                right = (LedStripT::SIZE / 2) + left;
+            } else {
+                right = (LedStripT::SIZE - 1) - idx;
+            }
+
+            if ((m_currentAnimation->m_states[m_animationIdx]) & (1 << idx)) {
+                m_ledStrip.setPixel(left, m_rgbColor);
+                m_ledStrip.setPixel(right, m_rgbColor);
+            } else {
+                m_ledStrip.setPixel(left, 0);
+                m_ledStrip.setPixel(right, 0);
+            }
+        }
+
+        m_animationIdx += 1;
+        if (m_animationIdx >= m_currentAnimation->m_len) {
+            m_animationIdx = 0;
+        }
+    }
+
+    void
     refresh(void) {
         const OutputMode_t outputMode = getCurrentOutputMode();
 
@@ -180,8 +268,10 @@ BlinkenBikeT {
             refreshSolid();
             break;
         case OutputMode_t::e_Flash:
-        default:
             refreshFlash();
+            break;
+        default:
+            refreshAnimation();
             break;
         }
     }
@@ -197,7 +287,8 @@ public:
         m_colorChanged(true),
         m_counter(0),
         m_speed(m_minSpeed),
-        m_flash(false)
+        m_flash(false),
+        m_animationIdx(0)
     {
         static_assert(LedStripT::SIZE > 1, "LED Strip should be more than one LED long!");
         static_assert((LedStripT::SIZE % 2) == 1, "LED Strip should be 1 + an even number of LEDs long!");
@@ -212,6 +303,11 @@ public:
 
         m_uiHsv = m_states[m_currentState].m_stateColor;
         m_uiChanged = true;
+
+        m_colorChanged = true;
+ 
+        m_currentAnimation = &m_animations[m_states[m_currentState].m_animationIdx];
+        m_animationIdx = 0;
 
         refresh();
     }
