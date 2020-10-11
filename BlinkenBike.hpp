@@ -138,7 +138,8 @@ BlinkenBikeT {
         }
 
         void update(ValueT p_new, bool p_directionCw) {
-            m_distance = (p_directionCw ? 1 : -1);
+            /* Bugfix in stm32f1 v1.1: Error in Hardware Wiring made the turning direction the opposite. */
+            m_distance = (p_directionCw ? -1 : 1);
 
             m_previous = p_new;
         }
