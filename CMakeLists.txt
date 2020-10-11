@@ -32,6 +32,11 @@ set(TARGET_LIBS
 )
 set(STM32_BOARD   STM32F1_BluePill    CACHE STRING "STM32 Board Type")
 
+if(("${CMAKE_BUILD_TYPE}" STREQUAL "MinSizeRel")
+  OR ("${CMAKE_BUILD_TYPE}" STREQUAL "Release"))
+    add_definitions("-DNO_LOGGING")
+endif()
+
 ###############################################################################
 # Include a common CMake File that contains the stuff which would normally go
 # in a top-level CMake File.
