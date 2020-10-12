@@ -62,6 +62,12 @@ protected:
 
         m_callback.shutdown();
 
+        /*
+         * Workaround for Blinkenbike: Give the SPI Transfer some time to settle; otherwise
+         * an LED may remain active.
+         */
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+
         taskDISABLE_INTERRUPTS();
 
         m_pwr.shutdown(PwrT::Mode_t::e_Standby);
